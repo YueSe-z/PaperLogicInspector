@@ -13,8 +13,7 @@ cd PaperLogicInspector
 pip install -r requirements.txt
 
 # 3. 配置 API Key
-cp .env.example .env
-# 编辑 .env 文件，填入 DeepSeek API Key
+# 将 .env.example 复制为 .env，然后编辑填入 DeepSeek API Key
 
 # 4. 启动
 python web_ui.py
