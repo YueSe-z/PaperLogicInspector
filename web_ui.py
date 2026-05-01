@@ -1,7 +1,11 @@
-from flask import Flask, render_template, request, jsonify
-from agents.parser_agent import parse_paragraph
-from agents.logic_agent import check_logic
-from agents.rewrite_agent import suggest_rewrite
+import json
+import queue
+import threading
+import traceback
+
+from flask import Flask, render_template, request, jsonify, Response
+
+from orchestrator.pipeline import ReviewPipeline
 
 app = Flask(__name__)
 
@@ -18,23 +22,50 @@ def analyze():
         return jsonify({"error": "请输入论文段落"}), 400
 
     try:
-        structure = parse_paragraph(text)
-
-        issues = check_logic(structure, text)
-
-        if "未发现明显逻辑问题" in issues:
-            suggestions = None
-        else:
-            suggestions = suggest_rewrite(text, issues)
-
-        return jsonify({
-            "structure": structure,
-            "issues": issues,
-            "suggestions": suggestions,
-        })
+        result = ReviewPipeline().run(text)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": f"分析失败: {str(e)}"}), 500
 
 
+@app.route("/analyze/stream", methods=["POST"])
+def analyze_stream():
+    text = request.json.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "请输入论文段落"}), 400
+
+    def generate():
+        q = queue.Queue()
+        pipeline = ReviewPipeline()
+
+        def on_progress(event):
+            q.put(event)
+
+        pipeline.progress_callback = on_progress
+
+        def run_pipeline():
+            try:
+                result = pipeline.run(text)
+                q.put({"event": "complete", "result": result})
+            except Exception as e:
+                q.put({"event": "error", "error": str(e), "traceback": traceback.format_exc()})
+
+        thread = threading.Thread(target=run_pipeline)
+        thread.start()
+
+        while True:
+            try:
+                event = q.get(timeout=30)
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                if event["event"] in ("complete", "error"):
+                    break
+            except queue.Empty:
+                yield f"data: {json.dumps({'event': 'heartbeat'})}\n\n"
+
+        thread.join()
+
+    return Response(generate(), mimetype="text/event-stream")
+
+
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False)

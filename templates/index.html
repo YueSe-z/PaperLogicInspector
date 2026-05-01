@@ -8,7 +8,7 @@
   :root { --bg: #f5f5f5; --card: #fff; --text: #333; --sub: #666; --border: #e0e0e0; --accent: #2563eb; --accent-hover: #1d4ed8; --danger: #dc2626; --warn: #f59e0b; --ok: #16a34a; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; min-height: 100vh; }
-  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+  .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
   header { text-align: center; margin-bottom: 28px; }
   header h1 { font-size: 24px; font-weight: 700; }
   header p { color: var(--sub); font-size: 14px; margin-top: 4px; }
@@ -26,16 +26,35 @@
 
   .status { margin-top: 12px; font-size: 14px; color: var(--sub); min-height: 20px; }
 
-  .result { display: none; margin-top: 24px; }
+  .progress-wrap { margin-top: 16px; display: none; }
+  .progress-bar { width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .3s; border-radius: 3px; }
+  .progress-text { font-size: 13px; color: var(--sub); margin-top: 6px; }
+
+  .stage-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .stage-tag { font-size: 12px; padding: 2px 10px; border-radius: 12px; background: var(--border); color: var(--sub); }
+  .stage-tag.done { background: #dcfce7; color: var(--ok); }
+  .stage-tag.active { background: #dbeafe; color: var(--accent); }
+  .stage-tag.fail { background: #fef2f2; color: var(--danger); }
+
+  .results { display: none; margin-top: 24px; }
   .card { background: var(--card); border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
   .card h3 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-  .card h3 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  .dot-s { background: var(--accent); }
-  .dot-i { background: var(--warn); }
-  .dot-r { background: var(--ok); }
+  .card h3 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot-done { background: var(--ok); }
+  .dot-concern { background: var(--warn); }
+  .dot-blocked { background: var(--danger); }
+  .dot-running { background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-  .card .content { white-space: pre-wrap; font-size: 14px; color: var(--text); }
-  .card .content:empty::after { content: "—"; color: #ccc; }
+  .card .content { white-space: pre-wrap; font-size: 14px; color: var(--text); max-height: 400px; overflow-y: auto; }
+  .card .content:empty::after { content: "等待中..."; color: #ccc; }
+
+  .card .concerns { margin-top: 10px; padding: 10px 14px; background: #fffbeb; border-left: 3px solid var(--warn); border-radius: 4px; font-size: 13px; display: none; }
+
+  .paragraph-section { margin-bottom: 20px; }
+  .paragraph-section h4 { font-size: 14px; color: var(--accent); margin-bottom: 8px; cursor: pointer; }
+  .paragraph-section .para-text { font-size: 13px; color: var(--sub); background: #f9fafb; padding: 10px; border-radius: 6px; margin-bottom: 8px; }
 
   .error { background: #fef2f2; color: var(--danger); padding: 14px 18px; border-radius: 8px; font-size: 14px; display: none; }
 </style>
@@ -43,8 +62,8 @@
 <body>
 <div class="container">
   <header>
-    <h1>论文逻辑审查助手</h1>
-    <p>粘贴论文段落 — AI 自动拆解结构、检查逻辑问题、给出改写建议</p>
+    <h1>论文多维度审查系统</h1>
+    <p>粘贴论文 — 自动拆分段落、多维度联合审查（逻辑/方法论/创新性/证据/清晰度）</p>
   </header>
 
   <textarea id="input" placeholder="在此粘贴论文段落（支持中英文，可输入整篇论文）..."></textarea>
@@ -55,72 +74,217 @@
   <div class="status" id="status"></div>
   <div class="error" id="error"></div>
 
-  <div class="result" id="result">
-    <div class="card">
-      <h3><span class="dot dot-s"></span>段落结构拆解</h3>
-      <div class="content" id="structure"></div>
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText"></div>
+    <div class="stage-tags" id="stageTags"></div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="card" id="cardLogic">
+      <h3><span class="dot dot-running" id="dotLogic"></span>逻辑审查</h3>
+      <div class="content" id="contentLogic"></div>
+      <div class="concerns" id="concernsLogic"></div>
     </div>
-    <div class="card">
-      <h3><span class="dot dot-i"></span>逻辑问题检查</h3>
-      <div class="content" id="issues"></div>
+    <div class="card" id="cardMethodology">
+      <h3><span class="dot dot-running" id="dotMethodology"></span>方法论审查</h3>
+      <div class="content" id="contentMethodology"></div>
+      <div class="concerns" id="concernsMethodology"></div>
     </div>
-    <div class="card">
-      <h3><span class="dot dot-r"></span>改写建议</h3>
-      <div class="content" id="suggestions"></div>
+    <div class="card" id="cardNovelty">
+      <h3><span class="dot dot-running" id="dotNovelty"></span>创新性评估</h3>
+      <div class="content" id="contentNovelty"></div>
+      <div class="concerns" id="concernsNovelty"></div>
     </div>
+    <div class="card" id="cardEvidence">
+      <h3><span class="dot dot-running" id="dotEvidence"></span>实验证据审查</h3>
+      <div class="content" id="contentEvidence"></div>
+      <div class="concerns" id="concernsEvidence"></div>
+    </div>
+    <div class="card" id="cardClarity">
+      <h3><span class="dot dot-running" id="dotClarity"></span>清晰度审查</h3>
+      <div class="content" id="contentClarity"></div>
+      <div class="concerns" id="concernsClarity"></div>
+    </div>
+    <div id="paragraphResults"></div>
   </div>
 </div>
 
 <script>
-async function doAnalyze() {
-  const text = document.getElementById('input').value.trim();
-  if (!text) return;
+const DIMENSIONS = ['logic', 'methodology', 'novelty', 'evidence', 'clarity'];
+const DIM_LABELS = { logic: '逻辑审查', methodology: '方法论审查', novelty: '创新性评估', evidence: '实验证据审查', clarity: '清晰度审查' };
+const TOTAL_STAGES = 8; // split + parse + 5 reviews + rewrite
+let completedStages = 0, dimCompleted = {}, abortCtrl = null;
 
-  const btn = document.getElementById('btnAnalyze');
-  const status = document.getElementById('status');
-  const error = document.getElementById('error');
-  const result = document.getElementById('result');
+function updateProgress(text, stage) {
+  if (!dimCompleted[stage]) { dimCompleted[stage] = true; completedStages++; }
+  var pct = Math.round((completedStages / TOTAL_STAGES) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = text + ' (' + pct + '%)';
+}
 
-  btn.disabled = true;
-  status.textContent = '正在分析，请稍候...';
-  error.style.display = 'none';
-  result.style.display = 'none';
-  document.getElementById('structure').textContent = '';
-  document.getElementById('issues').textContent = '';
-  document.getElementById('suggestions').textContent = '';
-
-  try {
-    const resp = await fetch('/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    });
-    const data = await resp.json();
-
-    if (!resp.ok) { throw new Error(data.error || '请求失败'); }
-
-    document.getElementById('structure').textContent = data.structure;
-    document.getElementById('issues').textContent = data.issues;
-    document.getElementById('suggestions').textContent = data.suggestions || '未发现明显逻辑问题，无需改写。';
-    result.style.display = 'block';
-    status.textContent = '分析完成';
-  } catch (e) {
-    error.textContent = e.message;
-    error.style.display = 'block';
-    status.textContent = '';
-  } finally {
-    btn.disabled = false;
+function setStageTag(name, cls) {
+  var tags = document.getElementById('stageTags');
+  var existing = document.getElementById('tag-' + name);
+  if (!existing) {
+    var span = document.createElement('span');
+    span.className = 'stage-tag ' + cls;
+    span.id = 'tag-' + name;
+    span.textContent = name;
+    tags.appendChild(span);
+  } else {
+    existing.className = 'stage-tag ' + cls;
   }
 }
 
+function setDot(dim, cls) {
+  var dot = document.getElementById('dot' + dim.charAt(0).toUpperCase() + dim.slice(1));
+  if (dot) { dot.className = 'dot ' + cls; }
+}
+
+function statusClass(s) {
+  if (s === 'DONE') return 'dot-done';
+  if (s === 'DONE_WITH_CONCERNS') return 'dot-concern';
+  if (s === 'BLOCKED') return 'dot-blocked';
+  return 'dot-running';
+}
+
+async function doAnalyze() {
+  var text = document.getElementById('input').value.trim();
+  if (!text) return;
+
+  document.getElementById('btnAnalyze').disabled = true;
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressText').textContent = '初始化...';
+  document.getElementById('stageTags').innerHTML = '';
+  document.getElementById('paragraphResults').innerHTML = '';
+  completedStages = 0; dimCompleted = {};
+  DIMENSIONS.forEach(function(d) {
+    var cap = d.charAt(0).toUpperCase() + d.slice(1);
+    document.getElementById('content' + cap).textContent = '';
+    document.getElementById('concerns' + cap).style.display = 'none';
+    document.getElementById('concerns' + cap).textContent = '';
+    setDot(d, 'dot-running');
+  });
+
+  abortCtrl = new AbortController();
+
+  try {
+    var resp = await fetch('/analyze/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text }),
+      signal: abortCtrl.signal,
+    });
+
+    var reader = resp.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+
+    while (true) {
+      var _a = await reader.read(), done = _a.done, chunk = _a.value;
+      if (done) break;
+      buffer += decoder.decode(chunk, { stream: true });
+      var lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (var _i = 0, lines_1 = lines; _i < lines_1.length; _i++) {
+        var line = lines_1[_i];
+        if (!line.startsWith('data: ')) continue;
+        try { handleEvent(JSON.parse(line.slice(6))); } catch (e) {}
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      document.getElementById('error').textContent = e.message;
+      document.getElementById('error').style.display = 'block';
+    }
+  } finally {
+    document.getElementById('btnAnalyze').disabled = false;
+    abortCtrl = null;
+  }
+}
+
+function handleEvent(data) {
+  var evt = data.event;
+  if (evt === 'split') {
+    updateProgress('已拆分 ' + data.paragraph_count + ' 个段落', 'split');
+    setStageTag('拆分', 'done');
+    setStageTag('解析', 'active');
+  } else if (evt === 'parse') {
+    updateProgress('解析段落结构 (' + (data.paragraph + 1) + '/' + data.total + ')', 'parse');
+    if (data.paragraph + 1 >= data.total) setStageTag('解析', 'done');
+  } else if (evt === 'review_worker') {
+    var dim = data.dimension;
+    setStageTag(DIM_LABELS[dim], 'active');
+    setDot(dim, 'dot-running');
+    document.getElementById('content' + dim.charAt(0).toUpperCase() + dim.slice(1)).textContent = '正在审查...';
+    updateProgress(DIM_LABELS[dim] + ' 审查中', dim + '_worker');
+  } else if (evt === 'review_rubric') {
+    var dim = data.dimension;
+    setStageTag(DIM_LABELS[dim], data.status === 'DONE' ? 'done' : 'fail');
+    setDot(dim, statusClass(data.status));
+    updateProgress(DIM_LABELS[dim] + ' 完成', dim);
+  } else if (evt === 'rewrite') {
+    updateProgress('生成改写建议', 'rewrite');
+    if (data.status === 'DONE') setStageTag('改写', 'done'); else setStageTag('改写', 'fail');
+  } else if (evt === 'complete') {
+    updateProgress('分析完成', 'done');
+    setStageTag('完成', 'done');
+    renderResults(data.result);
+  } else if (evt === 'error') {
+    document.getElementById('error').textContent = data.error;
+    document.getElementById('error').style.display = 'block';
+    document.getElementById('progressText').textContent = '分析出错';
+  }
+}
+
+function renderResults(result) {
+  // Dimension results
+  var dims = result.dimensions || {};
+  DIMENSIONS.forEach(function(d) {
+    var cap = d.charAt(0).toUpperCase() + d.slice(1);
+    var r = dims[d];
+    if (!r) return;
+    document.getElementById('content' + cap).textContent = r.content || '无输出';
+    if (r.concerns && r.concerns.length > 0) {
+      var cel = document.getElementById('concerns' + cap);
+      cel.textContent = '⚠ ' + r.concerns.join('；');
+      cel.style.display = 'block';
+    }
+    setDot(d, statusClass(r.status));
+  });
+
+  // Paragraph structures
+  var paras = result.paragraphs || [];
+  if (paras.length > 0) {
+    var html = '<div class="card"><h3>段落结构解析</h3>';
+    paras.forEach(function(p) {
+      html += '<div class="paragraph-section">';
+      html += '<h4>段落 ' + (p.index + 1) + '</h4>';
+      html += '<div class="para-text">' + escapeHtml(p.text).substring(0, 200) + '...</div>';
+      html += '<div class="content">' + escapeHtml(p.structure || '') + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    document.getElementById('paragraphResults').innerHTML = html;
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function clearAll() {
+  if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
   document.getElementById('input').value = '';
-  document.getElementById('result').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('progressWrap').style.display = 'none';
   document.getElementById('error').style.display = 'none';
   document.getElementById('status').textContent = '';
-  document.getElementById('structure').textContent = '';
-  document.getElementById('issues').textContent = '';
-  document.getElementById('suggestions').textContent = '';
+  document.getElementById('btnAnalyze').disabled = false;
 }
 </script>
 </body>

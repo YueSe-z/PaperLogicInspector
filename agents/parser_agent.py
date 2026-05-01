@@ -1,24 +1,40 @@
-from api_client import chat_completion
+from agents.base import BaseAgent
+from orchestrator.protocols import AgentResult
 
 
-def parse_paragraph(text: str) -> str:
-    prompt = f"""你是一个文本结构分析专家。请将以下段落拆解为四个部分：
-1. 论点：作者试图证明的核心观点
-2. 论据：支撑论点的事实、数据或引用
-3. 论证方式：举例、因果、对比、演绎等
-4. 结论：段落的最终落脚点
+class ParserAgent(BaseAgent):
+    role = "parser"
+    temperature = 0.3
+    max_tokens = 8192
+    system_prompt = "你是一个文本结构分析专家。请对文本逐段分析其论证结构。"
 
-如果某部分缺失，请明确标注"缺失"。
 
-段落内容：
+_agent = ParserAgent()
+
+
+def parse_paragraph_structured(text: str) -> AgentResult:
+    prompt = f"""请对以下文本逐段分析其论证结构。
+
+对于每个自然段（以空行分隔），识别：
+- 论点：作者试图证明的核心观点
+- 论据：支撑论点的事实、数据或引用（缺失则标注"缺失"）
+- 论证方式：举例、因果、对比、演绎等（缺失则标注"缺失"）
+- 结论：段落的最终落脚点（缺失则标注"缺失"）
+
+文本内容：
 {text}
 
-请用以下格式输出（不要输出额外解释）：
+请按以下格式逐段输出（保留原文段落顺序，每段编号标注）：
+【段落1】
 论点：...
 论据：...
 论证方式：...
-结论：..."""
-    return chat_completion(
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
+结论：...
+
+【段落2】
+..."""
+    return _agent.run(prompt)
+
+
+def parse_paragraphs(paragraphs: list[str]) -> list[AgentResult]:
+    return [parse_paragraph_structured(p) for p in paragraphs]

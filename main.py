@@ -1,36 +1,58 @@
-from agents.parser_agent import parse_paragraph
-from agents.logic_agent import check_logic
-from agents.rewrite_agent import suggest_rewrite
+from orchestrator.pipeline import ReviewPipeline
+
 
 def main():
-    print("=== 论文逻辑审查助手 (MVP) ===")
-    print("请输入你的论文段落（输入 END 结束）：")
+    print("=== 论文多维度审查系统 ===")
+    print("请输入论文内容（输入 END 结束）：")
     lines = []
     while True:
         line = input()
         if line.strip() == "END":
             break
         lines.append(line)
-    user_text = "\n".join(lines)
+    text = "\n".join(lines)
 
-    if not user_text.strip():
+    if not text.strip():
         print("未输入内容，退出。")
         return
 
-    print("\n[1/3] 正在解析段落结构...")
-    parsed = parse_paragraph(user_text)
-    print("结构分析结果：\n", parsed)
+    pipeline = ReviewPipeline()
 
-    print("\n[2/3] 正在检查逻辑问题...")
-    issues = check_logic(parsed, user_text)
-    print("逻辑问题列表：\n", issues)
+    def print_progress(event):
+        name = event.get("dimension", "")
+        if event["event"] == "split":
+            print(f"[进度] 段落拆分完成，共 {event.get('paragraph_count', 0)} 段")
+        elif event["event"] == "parse":
+            print(f"[进度] 段落结构解析 {event.get('paragraph', 0) + 1}/{event.get('total', 0)}")
+        elif event["event"] == "review_worker":
+            print(f"[进度] {name} 审查中...")
+        elif event["event"] == "review_rubric":
+            print(f"[进度] {name} 完成 - {event.get('status', '')}")
+        elif event["event"] == "rewrite":
+            print(f"[进度] 改写建议生成完成")
 
-    if issues.strip() != "未发现明显逻辑问题":
-        print("\n[3/3] 正在生成改写建议...")
-        rewrite = suggest_rewrite(user_text, issues)
-        print("改写建议：\n", rewrite)
+    pipeline.progress_callback = print_progress
+    result = pipeline.run(text)
+
+    print("\n" + "=" * 50)
+    print("审查结果汇总")
+    print("=" * 50)
+
+    for name, dim_result in result["dimensions"].items():
+        status = dim_result["status"]
+        icon = "✓" if status == "DONE" else "⚠" if status == "DONE_WITH_CONCERNS" else "✗"
+        print(f"\n{icon} [{name}] 状态: {status}")
+        if dim_result["concerns"]:
+            for c in dim_result["concerns"]:
+                print(f"  注意: {c}")
+        print(f"  详情: {dim_result['content'][:300]}...")
+
+    if result["rewrite"].get("rewritten"):
+        print("\n[改写建议]")
+        print(result["rewrite"]["rewritten"][:500])
     else:
-        print("\n未发现逻辑问题，无需改写。")
+        print("\n未发现需要改写的问题。")
+
 
 if __name__ == "__main__":
     main()
