@@ -1,6 +1,6 @@
 # 论文多维度审查系统
 
-基于 Claude 的论文多维度智能审查工具。粘贴论文全文，自动拆分段落、多维度联合审查、生成改写建议。
+基于 DeepSeek V4 的论文多维度智能审查工具。粘贴论文全文，自动拆分段落、多维度联合审查、生成改写建议。
 
 ## 快速开始
 
@@ -13,7 +13,8 @@ cd PaperLogicInspector
 pip install -r requirements.txt
 
 # 3. 配置 API Key
-# 编辑 .env 文件，填入 Anthropic API Key
+cp .env.example .env
+# 编辑 .env 文件，填入 DeepSeek API Key
 
 # 4. 启动
 python web_ui.py
@@ -76,7 +77,7 @@ python web_ui.py
 │   ├── protocols.py     # 数据结构
 │   ├── paragraph_splitter.py
 │   └── pipeline.py      # 核心流水线
-├── api_client.py        # Anthropic API 调用
+├── api_client.py        # DeepSeek API 调用（Anthropic 兼容端点）
 ├── config.py            # 环境配置
 ├── main.py              # CLI 入口
 ├── web_ui.py            # Flask Web 入口
@@ -89,9 +90,9 @@ python web_ui.py
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `API_KEY` | (必填) | Anthropic API Key |
-| `BASE_URL` | `None` | API 地址（默认使用 Anthropic 官方） |
-| `MODEL_NAME` | `claude-sonnet-4-5-20250929` | 模型名称 |
+| `API_KEY` | (必填) | DeepSeek API Key |
+| `BASE_URL` | `https://api.deepseek.com/anthropic` | API 地址（DeepSeek Anthropic 兼容端点） |
+| `MODEL_NAME` | `deepseek-v4-pro[1m]` | 模型名称 |
 | `MAX_PARAGRAPH_CHARS` | `3000` | 段落最大字符数 |
 | `MAX_WORKERS` | `6` | 并行解析线程数 |
 | `MAX_RUBRIC_RETRIES` | `2` | Rubric 审查最大重试次数 |
